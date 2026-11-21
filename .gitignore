@@ -53,3 +53,9 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Python bot runtime
+.pythonlibs/
+__pycache__/
+*.py[cod]
+/pauza_bot/pauza.db*

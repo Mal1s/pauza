@@ -1,15 +1,18 @@
-# [Project name]
+# ПАУЗА — Telegram-бот набора игроков
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+Long-polling Telegram-бот для анкет футболистов команды «ПАУЗА» и работы тренеров с заявками в закрытой группе. Продукт работает только в Telegram; сайт и Mini App не нужны.
 
 ## Run & Operate
 
 - `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
+- `python3.11 -m pauza_bot.main` — run the PAUZA Telegram bot
+- `python3.11 -m unittest discover -s tests -v` — test bot validation and database logic
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- Required env for the API server: `DATABASE_URL` — Postgres connection string
+- Required Replit Secrets for the Telegram bot: `BOT_TOKEN`, `ADMIN_CHAT_ID`
 
 ## Stack
 
@@ -19,18 +22,26 @@ _Replace the heading above with the project's name, and this line with one sente
 - Validation: Zod (`zod/v4`), `drizzle-zod`
 - API codegen: Orval (from OpenAPI spec)
 - Build: esbuild (CJS bundle)
+- Telegram bot: Python 3.11, aiogram 3, aiosqlite and SQLite
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `pauza_bot/main.py` — bot handlers, player questionnaire, admin actions and commands
+- `pauza_bot/keyboards.py` — inline keyboard layouts
+- `pauza_bot/texts.py` — editable bot copy, labels and emojis
+- `pauza_bot/db.py` — SQLite schema and queries
+- `pauza_bot/README.md` — bot setup and long-running deployment notes
+- `tests/test_bot_core.py` — bot validation and persistence tests
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- The applicant flow edits one Telegram message; FSM drafts live in memory and are lost on restart.
+- Submitted applications and coach notes persist in the SQLite database.
+- The bot runs by long polling and must use a long-lived worker process for 24/7 operation.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- Player applications, coach review cards, application statuses, trial notifications, notes, search, statistics and CSV export.
 
 ## User preferences
 
