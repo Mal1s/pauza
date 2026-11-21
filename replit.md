@@ -41,7 +41,7 @@ Long-polling Telegram-бот для анкет футболистов коман
 
 ## Product
 
-- Player applications, coach review cards, application statuses, trial notifications, notes, search, statistics and CSV export.
+- Player applications (including optional additional information), coach review cards, accept/reject actions, trial notifications, notes, search, statistics and CSV export.
 
 ## User preferences
 

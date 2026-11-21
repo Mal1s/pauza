@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from pauza_bot import db
+from pauza_bot.keyboards import status_keyboard
 from pauza_bot.main import (
     _valid_contact,
     _validate_text,
@@ -37,6 +38,7 @@ def application_data() -> dict:
         "injury_details": None,
         "referral_source": "friends",
         "about": "Быстрый и командный",
+        "additional_info": "Играю в любительской лиге",
     }
 
 
@@ -60,6 +62,7 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
         saved = await db.get_application(first["application_id"])
         self.assertEqual(saved["days"], ["mon", "wed"])
         self.assertEqual(saved["times"], ["evening"])
+        self.assertEqual(saved["additional_info"], "Играю в любительской лиге")
 
     async def test_status_transition_is_atomic_and_claim_is_saved(self) -> None:
         created = await db.create_application_if_allowed(123, "ivan", application_data())
@@ -129,6 +132,7 @@ class ValidationTests(unittest.TestCase):
         data = application_data()
         review = render_review({**data, "full_name": "Иванов <тест>"})
         self.assertIn("&lt;тест&gt;", review)
+        self.assertIn("Играю в любительской лиге", review)
         self.assertLess(len(review), 4096)
 
         application = {
@@ -153,6 +157,20 @@ class ValidationTests(unittest.TestCase):
         card = render_application_card(application, notes, admin=True)
         self.assertLess(len(card), 4096)
         self.assertIn("Новая заявка #42", card)
+        self.assertIn("Играю в любительской лиге", card)
+
+    def test_admin_application_card_has_accept_reject_and_contact_actions(self) -> None:
+        keyboard = status_keyboard(
+            "new",
+            42,
+            "https://t.me/ivan_football",
+        )
+        buttons = [button for row in keyboard.inline_keyboard for button in row]
+        self.assertIn("✅ Принять", [button.text for button in buttons])
+        self.assertIn("❌ Отказать", [button.text for button in buttons])
+        contact_button = next(button for button in buttons if button.url)
+        self.assertEqual(contact_button.url, "https://t.me/ivan_football")
+        self.assertIn("admin:accept:42", [button.callback_data for button in buttons])
 
 
 if __name__ == "__main__":

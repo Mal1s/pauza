@@ -35,7 +35,7 @@ from . import db, keyboards, texts
 logger = logging.getLogger("pauza_bot")
 router = Router()
 MOSCOW_TZ = ZoneInfo("Europe/Moscow")
-TOTAL_STEPS = 16
+TOTAL_STEPS = 17
 STEP_ORDER = [
     "full_name",
     "birth_date",
@@ -56,6 +56,7 @@ STEP_ORDER = [
     "injury_details",
     "referral_source",
     "about",
+    "additional_info",
 ]
 PROGRESS_GROUP = {
     "full_name": 1,
@@ -77,8 +78,9 @@ PROGRESS_GROUP = {
     "injury_details": 14,
     "referral_source": 15,
     "about": 16,
+    "additional_info": 17,
 }
-OPTIONAL_STEPS = {"achievements", "video_link", "about"}
+OPTIONAL_STEPS = {"achievements", "video_link", "about", "additional_info"}
 DAY_CODES = {value for _, value in texts.DAYS}
 TIME_CODES = {value for _, value in texts.TIMES}
 POSITION_CODES = {value for _, value in texts.POSITIONS}
@@ -258,6 +260,7 @@ def render_review(data: dict[str, Any]) -> str:
         injury=injury_text,
         source=_esc(format_source(data.get("referral_source"))),
         about=_esc(data.get("about")),
+        additional_info=_esc(data.get("additional_info")),
         help=texts.REVIEW_HELP,
     )
 
@@ -343,6 +346,9 @@ def render_application_card(
             source=_esc(format_source(application.get("referral_source")))
         ),
         texts.APPLICATION_ABOUT.format(about=_esc(application.get("about"))),
+        texts.APPLICATION_ADDITIONAL_INFO.format(
+            additional_info=_esc(application.get("additional_info"))
+        ),
     ]
     if admin:
         lines.extend(
@@ -612,6 +618,10 @@ def _validate_text(step: str, raw: str) -> tuple[bool, Any, str | None, str | No
         if len(value) <= 150:
             return True, value or None, None, None
         return False, None, texts.ERRORS["about"], None
+    if step == "additional_info":
+        if len(value) <= 500:
+            return True, value or None, None, None
+        return False, None, texts.ERRORS["additional_info"], None
     return False, None, texts.UNEXPECTED_TEXT, None
 
 
@@ -1065,6 +1075,7 @@ async def survey_text_input(message: Message, state: FSMContext, bot: Bot) -> No
         "video_link",
         "injury_details",
         "about",
+        "additional_info",
     }:
         await _delete_message(message)
         await _edit_screen(bot, message.chat.id, state, error=texts.UNEXPECTED_TEXT)
@@ -1160,7 +1171,7 @@ async def admin_action(callback: CallbackQuery, state: FSMContext, bot: Bot) -> 
     if not application:
         await callback.answer(texts.ADMIN_NOT_FOUND, show_alert=True)
         return
-    if action == "contact":
+    if action == "accept":
         updated = await db.update_status(
             application_id,
             ("new", "reserve"),
@@ -1170,14 +1181,20 @@ async def admin_action(callback: CallbackQuery, state: FSMContext, bot: Bot) -> 
             claim=True,
         )
         if not updated:
-            current = await db.get_application(application_id)
-            if current and current.get("taken_by_id") not in (None, actor_id):
-                await callback.answer(texts.ADMIN_CLAIMED_BY_OTHER, show_alert=True)
-            else:
-                await callback.answer(texts.ADMIN_ALREADY_PROCESSED, show_alert=True)
+            await callback.answer(texts.ADMIN_ALREADY_PROCESSED, show_alert=True)
             return
         await _refresh_admin_card(bot, application_id)
-        await callback.answer(texts.ADMIN_MOVED_TO_WORK)
+        await state.set_state(AdminInput.appointment)
+        await state.update_data(
+            application_id=application_id,
+            prompt_message_id=None,
+            admin_chat_id=message.chat.id,
+        )
+        prompt = await message.answer(
+            texts.ADMIN_ASK_APPOINTMENT.format(application_id=application_id)
+        )
+        await state.update_data(prompt_message_id=prompt.message_id)
+        await callback.answer(texts.ADMIN_ACCEPTED_ASK_DETAILS)
         return
     if action == "reserve":
         updated = await db.update_status(

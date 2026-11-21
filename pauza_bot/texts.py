@@ -74,6 +74,7 @@ REVIEW_TEMPLATE = (
     "🩹 Травмы: {injury}\n"
     "📣 Узнал: {source}\n"
     "💭 О себе: {about}\n\n"
+    "🗒 Дополнительно: {additional_info}\n\n"
     "{help}"
 )
 APPLICATION_TITLE = "⚽ <b>ПАУЗА · заявка #{application_id}</b>"
@@ -92,6 +93,7 @@ APPLICATION_AVAILABILITY = "📅 {days} · {times}"
 APPLICATION_INJURY = "🩹 Травмы: {injury}"
 APPLICATION_SOURCE = "📣 Узнал: {source}"
 APPLICATION_ABOUT = "💭 О себе: {about}"
+APPLICATION_ADDITIONAL_INFO = "🗒 Дополнительно: {additional_info}"
 SCHOOL_NOT_ATTENDED = "нет"
 SCHOOL_ATTENDED = "да, «{school}», {years}"
 INJURY_NONE = "нет"
@@ -108,7 +110,7 @@ SECONDARY_SAME_ERROR = "Запасная позиция должна отлич�
 ACTION_CANCELLED = "Действие отменено."
 ADMIN_ONLY_ACTION = "Это действие доступно только в админ-чате."
 ADMIN_REJECTION_SAVED = "Отказ сохранён."
-ADMIN_MOVED_TO_WORK = "Заявка теперь в работе."
+ADMIN_ACCEPTED_ASK_DETAILS = "Заявка принята. Отправь дату, время и место просмотра."
 ADMIN_MOVED_TO_RESERVE = "Заявка добавлена в резерв."
 ADMIN_TEXT_ONLY = "Пожалуйста, отправь ответ текстом."
 ADMIN_SEARCH_ROW = (
@@ -165,6 +167,10 @@ QUESTIONS = {
     "injury_details": "Коротко расскажи о травме или ограничении. Это предупреждение для тренера, не медицинская анкета.",
     "referral_source": "Откуда ты узнал о команде?",
     "about": "Опиши себя одной строкой — до 150 символов. Это необязательно.",
+    "additional_info": (
+        "Есть ещё что-то, что тренеру важно знать? Расскажи об опыте, стиле игры "
+        "или мотивации — до 500 символов. Это необязательно."
+    ),
 }
 
 ERRORS = {
@@ -180,6 +186,7 @@ ERRORS = {
     "injury_details": "Напиши коротко, до 300 символов.",
     "referral_source": "Выбери один из вариантов на кнопках.",
     "about": "Умести ответ в 150 символов или пропусти этот шаг.",
+    "additional_info": "Умести ответ в 500 символов или пропусти этот шаг.",
 }
 
 SCHOOL_YEARS = [
@@ -249,7 +256,7 @@ CLAIM_ADMIN = "Взял: {admin} · {when}"
 ACTION_ADMIN = "Изменил: {admin} · {when}"
 AUDITION_ADMIN = "🟢 <b>Просмотр:</b> {details}"
 NOTE_ADMIN = "📝 <b>Заметка от {admin}:</b> {note}"
-ADMIN_CONTACT_BUTTON = "📞 Связаться"
+ADMIN_ACCEPT_BUTTON = "✅ Принять"
 ADMIN_REJECT_BUTTON = "❌ Отказать"
 ADMIN_RESERVE_BUTTON = "⏳ В резерв"
 ADMIN_NOTE_BUTTON = "📝 Заметка"
@@ -267,7 +274,6 @@ ADMIN_INVALID_NOTE = "Заметка должна содержать от 1 до
 ADMIN_NOTE_SAVED = "Заметка сохранена."
 ADMIN_APPOINTMENT_SENT = "Просмотр назначен. Игроку отправлено уведомление."
 ADMIN_ALREADY_PROCESSED = "Эта заявка уже обработана или изменена другим тренером."
-ADMIN_CLAIMED_BY_OTHER = "Заявка уже взята в работу другим тренером."
 ADMIN_NOT_FOUND = "Заявка не найдена."
 ADMIN_STATS_TITLE = "📊 <b>Сводка по заявкам</b>"
 ADMIN_NEW_EMPTY = "🟡 Новых заявок пока нет."
@@ -323,6 +329,7 @@ FIELD_NAMES = {
     "injury_details": "Комментарий о травме",
     "referral_source": "Источник",
     "about": "О себе",
+    "additional_info": "Дополнительная информация",
 }
 FIELD_DISPLAY_ORDER = list(FIELD_NAMES)
 CSV_HEADERS = {
@@ -349,6 +356,7 @@ CSV_HEADERS = {
     "injury_details": "Комментарий о травме",
     "referral_source": "Источник",
     "about": "О себе",
+    "additional_info": "Дополнительная информация",
     "status": "Статус",
     "taken_by_name": "Взял в работу",
     "taken_at": "Дата взятия в работу",

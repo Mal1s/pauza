@@ -73,6 +73,7 @@ async def init_db() -> None:
                 injury_details TEXT,
                 referral_source TEXT NOT NULL,
                 about TEXT,
+                additional_info TEXT,
                 status TEXT NOT NULL DEFAULT 'new',
                 taken_by_id INTEGER,
                 taken_by_name TEXT,
@@ -202,6 +203,7 @@ async def create_application_if_allowed(
             data.get("injury_details"),
             data["referral_source"],
             data.get("about"),
+            data.get("additional_info"),
             timestamp,
             timestamp,
         )
@@ -212,8 +214,8 @@ async def create_application_if_allowed(
                 school_name, school_years, height_cm, weight_kg, primary_position,
                 secondary_position, working_foot, level, achievements, video_link,
                 days_json, times_json, injuries, injury_details, referral_source,
-                about, created_at, status_updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                about, additional_info, created_at, status_updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             values,
         )

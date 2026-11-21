@@ -100,7 +100,7 @@ def survey_keyboard(step: str, data: dict) -> InlineKeyboardMarkup:
     navigation = []
     if step != "full_name":
         navigation.append(button(texts.BACK_BUTTON, "survey:back"))
-    if step in {"achievements", "video_link", "about"}:
+    if step in {"achievements", "video_link", "about", "additional_info"}:
         navigation.append(button(texts.SKIP_BUTTON, "survey:skip"))
     navigation.append(button(texts.CANCEL_BUTTON, "survey:cancel"))
     rows.append(navigation)
@@ -142,7 +142,7 @@ def status_keyboard(status: str, application_id: int, contact_url: str | None) -
     if status == "new":
         rows.append(
             [
-                button(texts.ADMIN_CONTACT_BUTTON, f"admin:contact:{application_id}"),
+                button(texts.ADMIN_ACCEPT_BUTTON, f"admin:accept:{application_id}"),
                 button(texts.ADMIN_REJECT_BUTTON, f"admin:reject:{application_id}"),
             ]
         )
@@ -168,7 +168,7 @@ def status_keyboard(status: str, application_id: int, contact_url: str | None) -
     elif status == "reserve":
         rows.append(
             [
-                button(texts.ADMIN_CONTACT_BUTTON, f"admin:contact:{application_id}"),
+                button(texts.ADMIN_ACCEPT_BUTTON, f"admin:accept:{application_id}"),
                 button(texts.ADMIN_REJECT_BUTTON, f"admin:reject:{application_id}"),
             ]
         )
