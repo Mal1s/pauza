@@ -1356,7 +1356,7 @@ async def admin_non_text_input(message: Message, state: FSMContext) -> None:
             await message.bot.edit_message_text(
                 chat_id=message.chat.id,
                 message_id=prompt_id,
-                    text=texts.COACH_TEXT_ONLY,
+                    text=texts.ADMIN_TEXT_ONLY,
             )
         except TelegramBadRequest:
             pass

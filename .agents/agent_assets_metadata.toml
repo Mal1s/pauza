@@ -1,0 +1,16 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "Fm7aR5D9v8hWanmj3wj2N"
+uri = "file://generated-artifacts/PAUZA.zip"
+type = "unspecified"
+title = "PAUZA.zip"
+description = "Архив Telegram-бота ФК «ПАУЗА»: объединённый PAUZA.py, инструкции и список зависимостей. Настоящие токены и база анкет не включены."
+logical_id = "af044532-0714-4801-8caf-837766e72441"
+content_hash = "sha256:bc1b68df461e97dc6efe8bc99b787df2a29d7e941465ca62046f8e5cb42cd4f3"
+size = 23928
+mtime_ms = 1795386519354
+storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:20fd12bd-2481-44be-b288-bbb6d7b8013b/af044532-0714-4801-8caf-837766e72441/b8d34ab5-5a38-41d8-a033-31c3673c35a1"
+storage_version_token = "1795386537562925"
+content_type = "application/octet-stream"
