@@ -21,6 +21,22 @@ def home_keyboard() -> InlineKeyboardMarkup:
     )
 
 
+def admin_menu_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                button(texts.ADMIN_MENU_NEW_BUTTON, "admin:menu:new"),
+                button(texts.ADMIN_MENU_FIND_BUTTON, "admin:menu:find"),
+            ],
+            [
+                button(texts.ADMIN_MENU_STATS_BUTTON, "admin:menu:stats"),
+                button(texts.ADMIN_MENU_EXPORT_BUTTON, "admin:menu:export"),
+            ],
+            [button(texts.ADMIN_MENU_HELP_BUTTON, "admin:menu:help")],
+        ]
+    )
+
+
 def cancel_confirm_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -65,27 +81,6 @@ def survey_keyboard(step: str, data: dict) -> InlineKeyboardMarkup:
         rows.extend(
             [[button(label, f"survey:choose:level:{value}")] for label, value in texts.LEVELS]
         )
-    elif step == "availability":
-        selected_days = set(data.get("days", []))
-        selected_times = set(data.get("times", []))
-        days = [
-            button(
-                f"{texts.SELECTED_MARK if value in selected_days else ''}{label}",
-                f"survey:toggle:day:{value}",
-            )
-            for label, value in texts.DAYS
-        ]
-        rows.extend([days[:4], days[4:]])
-        rows.append(
-            [
-                button(
-                    f"{texts.SELECTED_MARK if value in selected_times else ''}{label}",
-                    f"survey:toggle:time:{value}",
-                )
-                for label, value in texts.TIMES
-            ]
-        )
-        rows.append([button(texts.AVAILABILITY_DONE_BUTTON, "survey:availability:done")])
     elif step == "injuries":
         rows.append(
             [
@@ -93,10 +88,6 @@ def survey_keyboard(step: str, data: dict) -> InlineKeyboardMarkup:
                 button(texts.HAS_BUTTON, "survey:choose:injuries:yes"),
             ]
         )
-    elif step == "referral_source":
-        for label, value in texts.SOURCES:
-            rows.append([button(label, f"survey:choose:referral_source:{value}")])
-
     navigation = []
     if step != "full_name":
         navigation.append(button(texts.BACK_BUTTON, "survey:back"))

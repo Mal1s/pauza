@@ -25,6 +25,8 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import (
     BufferedInputFile,
+    BotCommand,
+    BotCommandScopeChat,
     CallbackQuery,
     Message,
     ReplyKeyboardRemove,
@@ -35,7 +37,7 @@ from . import db, keyboards, texts
 logger = logging.getLogger("pauza_bot")
 router = Router()
 MOSCOW_TZ = ZoneInfo("Europe/Moscow")
-TOTAL_STEPS = 17
+TOTAL_STEPS = 15
 STEP_ORDER = [
     "full_name",
     "birth_date",
@@ -51,10 +53,8 @@ STEP_ORDER = [
     "level",
     "achievements",
     "video_link",
-    "availability",
     "injuries",
     "injury_details",
-    "referral_source",
     "about",
     "additional_info",
 ]
@@ -73,16 +73,12 @@ PROGRESS_GROUP = {
     "level": 10,
     "achievements": 11,
     "video_link": 12,
-    "availability": 13,
-    "injuries": 14,
-    "injury_details": 14,
-    "referral_source": 15,
-    "about": 16,
-    "additional_info": 17,
+    "injuries": 13,
+    "injury_details": 13,
+    "about": 14,
+    "additional_info": 15,
 }
 OPTIONAL_STEPS = {"achievements", "video_link", "about", "additional_info"}
-DAY_CODES = {value for _, value in texts.DAYS}
-TIME_CODES = {value for _, value in texts.TIMES}
 POSITION_CODES = {value for _, value in texts.POSITIONS}
 NAME_PATTERN = re.compile(
     r"^[^\W\d_]+(?:[-’'][^\W\d_]+)*(?:\s+[^\W\d_]+(?:[-’'][^\W\d_]+)*)+$",
@@ -99,6 +95,7 @@ class SurveyForm(StatesGroup):
 class AdminInput(StatesGroup):
     appointment = State()
     note = State()
+    find = State()
 
 
 def _esc(value: Any, default: str | None = None) -> str:
@@ -205,13 +202,6 @@ def render_question(step: str, data: dict[str, Any], error: str | None = None) -
             else texts.CONTACT_MANUAL_PROMPT
         )
     body = f"{progress_header(step)}\n\n{question}"
-    if step == "availability":
-        selected_days = format_days(data.get("days", []))
-        selected_times = format_times(data.get("times", []))
-        body += "\n\n" + texts.AVAILABILITY_SELECTED.format(
-            days=_esc(selected_days),
-            times=_esc(selected_times),
-        )
     if data.get("flash"):
         body += f"\n\n{_esc(data['flash'])}"
     if error:
@@ -255,10 +245,7 @@ def render_review(data: dict[str, Any]) -> str:
         school=school,
         achievements=_esc(data.get("achievements")),
         video=_esc(data.get("video_link")),
-        days=_esc(format_days(data.get("days", []))),
-        times=_esc(format_times(data.get("times", []))),
         injury=injury_text,
-        source=_esc(format_source(data.get("referral_source"))),
         about=_esc(data.get("about")),
         additional_info=_esc(data.get("additional_info")),
         help=texts.REVIEW_HELP,
@@ -337,14 +324,7 @@ def render_application_card(
         ),
         texts.APPLICATION_VIDEO.format(video=_esc(application.get("video_link"))),
         texts.SEPARATOR,
-        texts.APPLICATION_AVAILABILITY.format(
-            days=_esc(format_days(application.get("days", []))),
-            times=_esc(format_times(application.get("times", []))),
-        ),
         texts.APPLICATION_INJURY.format(injury=injury),
-        texts.APPLICATION_SOURCE.format(
-            source=_esc(format_source(application.get("referral_source")))
-        ),
         texts.APPLICATION_ABOUT.format(about=_esc(application.get("about"))),
         texts.APPLICATION_ADDITIONAL_INFO.format(
             additional_info=_esc(application.get("additional_info"))
@@ -743,8 +723,6 @@ async def _handle_home_apply(callback: CallbackQuery, state: FSMContext, bot: Bo
         step="full_name",
         view="form",
         editing=False,
-        days=[],
-        times=[],
         contact_username=callback.from_user.username,
         flash=None,
     )
@@ -908,7 +886,7 @@ async def survey_choose(callback: CallbackQuery, state: FSMContext, bot: Bot) ->
         return
     _, _, step, value = parts
     data = await state.get_data()
-    if step != data.get("step") or step == "availability":
+    if step != data.get("step"):
         await callback.answer(texts.UNEXPECTED_TEXT, show_alert=True)
         return
     allowed: dict[str, set[str]] = {
@@ -919,7 +897,6 @@ async def survey_choose(callback: CallbackQuery, state: FSMContext, bot: Bot) ->
         "working_foot": {value for _, value in texts.FEET},
         "level": {value for _, value in texts.LEVELS},
         "injuries": {"yes", "no"},
-        "referral_source": {value for _, value in texts.SOURCES},
     }
     if value not in allowed.get(step, set()):
         await callback.answer(texts.UNEXPECTED_TEXT, show_alert=True)
@@ -928,55 +905,6 @@ async def survey_choose(callback: CallbackQuery, state: FSMContext, bot: Bot) ->
         await callback.answer(texts.SECONDARY_SAME_ERROR, show_alert=True)
         return
     await _save_answer(bot, callback.message.chat.id, state, step, value)  # type: ignore[union-attr]
-    await callback.answer()
-
-
-@router.callback_query(F.data.startswith("survey:toggle:"))
-async def survey_toggle_availability(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
-    parts = (callback.data or "").split(":")
-    if len(parts) != 4 or await state.get_state() != SurveyForm.filling.state:
-        await callback.answer(texts.UNEXPECTED_TEXT, show_alert=True)
-        return
-    _, _, kind, value = parts
-    data = await state.get_data()
-    if data.get("step") != "availability":
-        await callback.answer(texts.UNEXPECTED_TEXT, show_alert=True)
-        return
-    selected = set(data.get("days" if kind == "day" else "times", []))
-    allowed = DAY_CODES if kind == "day" else TIME_CODES if kind == "time" else set()
-    if value not in allowed:
-        await callback.answer(texts.UNEXPECTED_TEXT, show_alert=True)
-        return
-    if value in selected:
-        selected.remove(value)
-    else:
-        selected.add(value)
-    key = "days" if kind == "day" else "times"
-    await state.update_data(**{key: [code for _, code in (texts.DAYS if kind == "day" else texts.TIMES) if code in selected]})
-    if callback.message:
-        await _edit_screen(bot, callback.message.chat.id, state)
-    await callback.answer()
-
-
-@router.callback_query(F.data == "survey:availability:done")
-async def survey_availability_done(
-    callback: CallbackQuery, state: FSMContext, bot: Bot
-) -> None:
-    data = await state.get_data()
-    if data.get("step") != "availability":
-        await callback.answer(texts.UNEXPECTED_TEXT, show_alert=True)
-        return
-    if not data.get("days") or not data.get("times"):
-        if callback.message:
-            await _edit_screen(
-                bot,
-                callback.message.chat.id,
-                state,
-                error=texts.ERRORS["availability"],
-            )
-        await callback.answer()
-        return
-    await _continue_after_answer(bot, callback.message.chat.id, state, "availability")  # type: ignore[union-attr]
     await callback.answer()
 
 
@@ -1119,6 +1047,34 @@ async def admin_action(callback: CallbackQuery, state: FSMContext, bot: Bot) -> 
     action = parts[1]
     actor_id = callback.from_user.id
     actor_name = _admin_name(callback)
+    if action == "menu":
+        if len(parts) != 3:
+            await callback.answer(texts.ADMIN_MENU_UNKNOWN_ACTION, show_alert=True)
+            return
+        menu_action = parts[2]
+        if menu_action == "find":
+            await state.clear()
+            await state.set_state(AdminInput.find)
+            prompt = await message.answer(texts.ADMIN_FIND_PROMPT)
+            await state.update_data(
+                admin_chat_id=message.chat.id,
+                prompt_message_id=prompt.message_id,
+            )
+            await callback.answer()
+            return
+        await state.clear()
+        await callback.answer()
+        if menu_action == "new":
+            await admin_new_command(message, bot)
+        elif menu_action == "stats":
+            await admin_stats_command(message)
+        elif menu_action == "export":
+            await admin_export_command(message)
+        elif menu_action == "help":
+            await admin_help_command(message)
+        else:
+            await message.answer(texts.ADMIN_MENU_UNKNOWN_ACTION)
+        return
     if action == "reject" and len(parts) == 3:
         try:
             application_id = int(parts[2])
@@ -1243,10 +1199,36 @@ async def admin_action(callback: CallbackQuery, state: FSMContext, bot: Bot) -> 
     await callback.answer(texts.ADMIN_ALREADY_PROCESSED, show_alert=True)
 
 
+def _is_cancel_command(value: str) -> bool:
+    return value.strip().partition("@")[0].lower() == "/cancel"
+
+
+async def _cancel_admin_input(
+    message: Message,
+    state: FSMContext,
+    bot: Bot,
+    data: dict[str, Any],
+) -> bool:
+    if not _is_cancel_command(message.text or ""):
+        return False
+    await _delete_message(message)
+    await state.clear()
+    prompt_id = data.get("prompt_message_id")
+    if prompt_id:
+        try:
+            await bot.delete_message(message.chat.id, prompt_id)
+        except TelegramBadRequest:
+            pass
+    await message.answer(texts.ACTION_CANCELLED, reply_markup=ReplyKeyboardRemove())
+    return True
+
+
 @router.message(AdminInput.appointment, F.text)
 async def admin_appointment_input(message: Message, state: FSMContext, bot: Bot) -> None:
     data = await state.get_data()
     if not _is_admin_chat(message.chat.id) or message.chat.id != data.get("admin_chat_id"):
+        return
+    if await _cancel_admin_input(message, state, bot, data):
         return
     details = (message.text or "").strip()
     if not 10 <= len(details) <= 500:
@@ -1296,6 +1278,8 @@ async def admin_note_input(message: Message, state: FSMContext, bot: Bot) -> Non
     data = await state.get_data()
     if not _is_admin_chat(message.chat.id) or message.chat.id != data.get("admin_chat_id"):
         return
+    if await _cancel_admin_input(message, state, bot, data):
+        return
     note_text = (message.text or "").strip()
     if not 1 <= len(note_text) <= 350:
         prompt_id = data.get("prompt_message_id")
@@ -1324,8 +1308,46 @@ async def admin_note_input(message: Message, state: FSMContext, bot: Bot) -> Non
     await message.answer(texts.ADMIN_NOTE_SAVED)
 
 
+@router.message(AdminInput.find, F.text)
+async def admin_find_input(message: Message, state: FSMContext, bot: Bot) -> None:
+    data = await state.get_data()
+    if not _is_admin_chat(message.chat.id) or message.chat.id != data.get("admin_chat_id"):
+        return
+    query = (message.text or "").strip()
+    await _delete_message(message)
+    prompt_id = data.get("prompt_message_id")
+    if _is_cancel_command(query):
+        await state.clear()
+        if prompt_id:
+            try:
+                await bot.delete_message(message.chat.id, prompt_id)
+            except TelegramBadRequest:
+                pass
+        await message.answer(texts.ADMIN_FIND_CANCELLED)
+        return
+    if not 2 <= len(query) <= 100:
+        if prompt_id:
+            try:
+                await bot.edit_message_text(
+                    chat_id=message.chat.id,
+                    message_id=prompt_id,
+                    text=f"{texts.ADMIN_FIND_INVALID}\n\n{texts.ADMIN_FIND_PROMPT}",
+                )
+            except TelegramBadRequest:
+                pass
+        return
+    await state.clear()
+    if prompt_id:
+        try:
+            await bot.delete_message(message.chat.id, prompt_id)
+        except TelegramBadRequest:
+            pass
+    await _send_find_results(bot, message.chat.id, query)
+
+
 @router.message(AdminInput.appointment)
 @router.message(AdminInput.note)
+@router.message(AdminInput.find)
 async def admin_non_text_input(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     prompt_id = data.get("prompt_message_id")
@@ -1338,6 +1360,26 @@ async def admin_non_text_input(message: Message, state: FSMContext) -> None:
             )
         except TelegramBadRequest:
             pass
+
+
+@router.message(Command("menu"))
+async def admin_menu_command(message: Message) -> None:
+    if not _is_admin_chat(message.chat.id):
+        return
+    await message.answer(
+        texts.ADMIN_MENU_TEXT.format(title=texts.ADMIN_MENU_TITLE),
+        reply_markup=keyboards.admin_menu_keyboard(),
+    )
+
+
+@router.message(Command("help"))
+async def admin_help_command(message: Message) -> None:
+    if not _is_admin_chat(message.chat.id):
+        return
+    await message.answer(
+        texts.ADMIN_HELP_TEXT,
+        reply_markup=keyboards.admin_menu_keyboard(),
+    )
 
 
 @router.message(Command("stats"))
@@ -1359,15 +1401,6 @@ async def admin_stats_command(message: Message) -> None:
         )
         for row in stats["positions"]
     ] or [texts.ADMIN_EMPTY_STATS]
-    source_rows = [
-        texts.ADMIN_SOURCE_STAT.format(
-            source=texts.SOURCE_NAMES.get(
-                row["referral_source"], row["referral_source"]
-            ),
-            amount=row["amount"],
-        )
-        for row in stats["sources"]
-    ] or [texts.ADMIN_EMPTY_STATS]
     average_age = stats["average_age"] if stats["average_age"] is not None else texts.UNKNOWN_VALUE
     await message.answer(
         f"{texts.ADMIN_STATS_TITLE}\n"
@@ -1382,10 +1415,6 @@ async def admin_stats_command(message: Message) -> None:
         + texts.ADMIN_STATS_POSITION_TITLE
         + "\n"
         + "\n".join(position_rows)
-        + "\n\n"
-        + texts.ADMIN_STATS_SOURCE_TITLE
-        + "\n"
-        + "\n".join(source_rows)
     )
 
 
@@ -1416,19 +1445,15 @@ async def admin_new_command(message: Message, bot: Bot) -> None:
         )
 
 
-@router.message(Command("find"))
-async def admin_find_command(message: Message) -> None:
-    if not _is_admin_chat(message.chat.id):
-        return
-    query = (message.text or "").partition(" ")[2].strip()
-    if not query:
-        await message.answer(texts.ADMIN_FIND_USAGE)
-        return
+async def _send_find_results(bot: Bot, chat_id: int, query: str) -> None:
     applications = await db.find_applications(query)
     if not applications:
-        await message.answer(texts.ADMIN_FIND_EMPTY)
+        await bot.send_message(chat_id, texts.ADMIN_FIND_EMPTY)
         return
-    await message.answer(texts.ADMIN_FIND_HEADER.format(count=len(applications)))
+    await bot.send_message(
+        chat_id,
+        texts.ADMIN_FIND_HEADER.format(count=len(applications)),
+    )
     for application in reversed(applications):
         status_emoji = texts.STATUS_EMOJI.get(
             application["status"], texts.ADMIN_UNKNOWN_STATUS
@@ -1442,7 +1467,8 @@ async def admin_find_command(message: Message) -> None:
             if contact_url
             else ""
         )
-        await message.answer(
+        await bot.send_message(
+            chat_id,
             texts.ADMIN_SEARCH_ROW.format(
                 id=application["id"],
                 name=_esc(application["full_name"]),
@@ -1450,8 +1476,19 @@ async def admin_find_command(message: Message) -> None:
                 status=_esc(status_label),
                 created_at=_esc(format_datetime(application.get("created_at"))),
                 contact=contact,
-            )
+            ),
         )
+
+
+@router.message(Command("find"))
+async def admin_find_command(message: Message, bot: Bot) -> None:
+    if not _is_admin_chat(message.chat.id):
+        return
+    query = (message.text or "").partition(" ")[2].strip()
+    if not query:
+        await message.answer(texts.ADMIN_FIND_USAGE)
+        return
+    await _send_find_results(bot, message.chat.id, query)
 
 
 @router.message(Command("export"))
@@ -1473,8 +1510,8 @@ async def admin_export_command(message: Message) -> None:
     writer.writerow(texts.CSV_HEADERS)
     for application in reversed(applications):
         row = {key: application.get(key) for key in fields}
-        row["days"] = format_days(application.get("days", []))
-        row["times"] = format_times(application.get("times", []))
+        row["days"] = format_days(application.get("days", [])) if application.get("days") else ""
+        row["times"] = format_times(application.get("times", [])) if application.get("times") else ""
         row["school_years"] = format_school_years(application.get("school_years"))
         row["primary_position"] = format_position(application.get("primary_position"))
         row["secondary_position"] = (
@@ -1484,7 +1521,11 @@ async def admin_export_command(message: Message) -> None:
         )
         row["working_foot"] = format_foot(application.get("working_foot"))
         row["level"] = format_level(application.get("level"))
-        row["referral_source"] = format_source(application.get("referral_source"))
+        row["referral_source"] = (
+            format_source(application.get("referral_source"))
+            if application.get("referral_source")
+            else ""
+        )
         writer.writerow(row)
     file = BufferedInputFile(
         output.getvalue().encode("utf-8-sig"),
@@ -1533,6 +1574,20 @@ async def run() -> None:
         token=token,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
+    try:
+        await bot.set_my_commands(
+            [
+                BotCommand(command="menu", description="Панель тренеров"),
+                BotCommand(command="new", description="Новые заявки"),
+                BotCommand(command="stats", description="Сводка по заявкам"),
+                BotCommand(command="find", description="Найти игрока"),
+                BotCommand(command="export", description="Выгрузить CSV"),
+                BotCommand(command="help", description="Как пользоваться ботом"),
+            ],
+            scope=BotCommandScopeChat(chat_id=ADMIN_CHAT_ID),
+        )
+    except TelegramAPIError as exc:
+        logger.warning("Could not register admin group commands: %s", exc)
     dispatcher = Dispatcher(storage=MemoryStorage())
     dispatcher.include_router(router)
     logger.info("PAUZA bot started with long polling")

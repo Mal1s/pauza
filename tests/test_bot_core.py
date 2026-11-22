@@ -5,8 +5,10 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from pauza_bot import db
-from pauza_bot.keyboards import status_keyboard
+from pauza_bot.keyboards import admin_menu_keyboard, status_keyboard
 from pauza_bot.main import (
+    STEP_ORDER,
+    TOTAL_STEPS,
     _valid_contact,
     _validate_text,
     age_from_birth_date,
@@ -111,6 +113,18 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
         notes = await db.get_notes(created["application_id"])
         self.assertEqual(notes[0]["note_text"], "Позвонить вечером")
 
+    async def test_application_can_be_created_without_schedule_or_source(self) -> None:
+        data = application_data()
+        data.pop("days")
+        data.pop("times")
+        data.pop("referral_source")
+        created = await db.create_application_if_allowed(123, "ivan", data)
+        self.assertTrue(created["ok"])
+        saved = await db.get_application(created["application_id"])
+        self.assertEqual(saved["days"], [])
+        self.assertEqual(saved["times"], [])
+        self.assertEqual(saved["referral_source"], "")
+
 
 class ValidationTests(unittest.TestCase):
     def test_contact_formats_are_normalized(self) -> None:
@@ -133,6 +147,11 @@ class ValidationTests(unittest.TestCase):
         review = render_review({**data, "full_name": "Иванов <тест>"})
         self.assertIn("&lt;тест&gt;", review)
         self.assertIn("Играю в любительской лиге", review)
+        self.assertNotIn("Узнал", review)
+        self.assertNotIn("📅", review)
+        self.assertEqual(TOTAL_STEPS, 15)
+        self.assertNotIn("availability", STEP_ORDER)
+        self.assertNotIn("referral_source", STEP_ORDER)
         self.assertLess(len(review), 4096)
 
         application = {
@@ -158,6 +177,8 @@ class ValidationTests(unittest.TestCase):
         self.assertLess(len(card), 4096)
         self.assertIn("Новая заявка #42", card)
         self.assertIn("Играю в любительской лиге", card)
+        self.assertNotIn("Узнал", card)
+        self.assertNotIn("📅", card)
 
     def test_admin_application_card_has_accept_reject_and_contact_actions(self) -> None:
         keyboard = status_keyboard(
@@ -171,6 +192,39 @@ class ValidationTests(unittest.TestCase):
         contact_button = next(button for button in buttons if button.url)
         self.assertEqual(contact_button.url, "https://t.me/ivan_football")
         self.assertIn("admin:accept:42", [button.callback_data for button in buttons])
+        for status in ("in_progress", "invited", "rejected", "reserve"):
+            status_keyboard_markup = status_keyboard(
+                status,
+                42,
+                "https://t.me/ivan_football",
+            )
+            self.assertIsNotNone(status_keyboard_markup)
+            assert status_keyboard_markup is not None
+            self.assertTrue(
+                any(
+                    button.url == "https://t.me/ivan_football"
+                    for row in status_keyboard_markup.inline_keyboard
+                    for button in row
+                )
+            )
+
+    def test_admin_menu_exposes_quick_actions(self) -> None:
+        keyboard = admin_menu_keyboard()
+        callbacks = [
+            button.callback_data
+            for row in keyboard.inline_keyboard
+            for button in row
+        ]
+        self.assertEqual(
+            set(callbacks),
+            {
+                "admin:menu:new",
+                "admin:menu:find",
+                "admin:menu:stats",
+                "admin:menu:export",
+                "admin:menu:help",
+            },
+        )
 
 
 if __name__ == "__main__":

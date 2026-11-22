@@ -201,7 +201,7 @@ async def create_application_if_allowed(
             json.dumps(data.get("times", []), ensure_ascii=False),
             data.get("injuries", "no"),
             data.get("injury_details"),
-            data["referral_source"],
+            data.get("referral_source", ""),
             data.get("about"),
             data.get("additional_info"),
             timestamp,
@@ -364,13 +364,6 @@ async def get_statistics() -> dict[str, Any]:
             """
         ) as cursor:
             positions = [dict(row) for row in await cursor.fetchall()]
-        async with db.execute(
-            """
-            SELECT referral_source, COUNT(*) AS amount FROM applications
-            GROUP BY referral_source ORDER BY amount DESC LIMIT 5
-            """
-        ) as cursor:
-            sources = [dict(row) for row in await cursor.fetchall()]
         async with db.execute("SELECT birth_date FROM applications") as cursor:
             birth_dates = [row["birth_date"] for row in await cursor.fetchall()]
     ages = []
@@ -386,6 +379,5 @@ async def get_statistics() -> dict[str, Any]:
         "total": sum(statuses.values()),
         "statuses": statuses,
         "positions": positions,
-        "sources": sources,
         "average_age": round(sum(ages) / len(ages), 1) if ages else None,
     }
