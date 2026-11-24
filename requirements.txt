@@ -15,7 +15,6 @@ multidict==7.2.1
 propcache==0.5.4
 pydantic==2.14.4
 pydantic_core==2.50.5
--e git+https://github.com/Mal1s/pauza.git@b3de37af50c2659825f9e6f5988b834aee6546d1#egg=repl_nix_workspace
 typing-inspection==0.4.5
 typing_extensions==4.16.0
 yarl==1.25.1
