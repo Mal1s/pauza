@@ -37,6 +37,23 @@ def admin_menu_keyboard() -> InlineKeyboardMarkup:
     )
 
 
+def new_applications_keyboard(
+    applications: list[dict], next_before_id: int | None, show_first_page: bool
+) -> InlineKeyboardMarkup | None:
+    rows = [
+        [button(f"#{item['id']} · {item['full_name'][:45]}", f"admin:open_new:{item['id']}")]
+        for item in applications
+    ]
+    navigation = []
+    if show_first_page:
+        navigation.append(button(texts.ADMIN_NEW_FIRST_PAGE, "admin:new_page:0"))
+    if next_before_id is not None:
+        navigation.append(button(texts.ADMIN_NEW_NEXT_PAGE, f"admin:new_page:{next_before_id}"))
+    if navigation:
+        rows.append(navigation)
+    return InlineKeyboardMarkup(inline_keyboard=rows) if rows else None
+
+
 def cancel_confirm_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -182,4 +199,3 @@ def reject_confirmation_keyboard(application_id: int) -> InlineKeyboardMarkup:
             ]
         ]
     )
-
