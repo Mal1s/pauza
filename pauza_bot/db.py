@@ -320,14 +320,23 @@ async def get_notes(application_id: int) -> list[dict[str, Any]]:
 
 
 async def list_applications(
-    *, statuses: tuple[str, ...] | None = None, limit: int | None = None
+    *,
+    statuses: tuple[str, ...] | None = None,
+    limit: int | None = None,
+    before_id: int | None = None,
 ) -> list[dict[str, Any]]:
     query = "SELECT * FROM applications"
     params: list[Any] = []
+    conditions = []
     if statuses:
         placeholders = ", ".join(f"${i + 1}" for i in range(len(statuses)))
-        query += f" WHERE status IN ({placeholders})"
+        conditions.append(f"status IN ({placeholders})")
         params.extend(statuses)
+    if before_id is not None:
+        params.append(before_id)
+        conditions.append(f"id < ${len(params)}")
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
     query += " ORDER BY id DESC"
     if limit is not None:
         query += f" LIMIT ${len(params) + 1}"
