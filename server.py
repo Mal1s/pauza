@@ -1,20 +1,33 @@
 import os
 import asyncio
-from http.server import SimpleHTTPRequestHandler, HTTPServer
-from threading import Thread
-from pauza_bot.main import main as bot_main
+from aiohttp import web
+import threading
+from pauza_bot.main import main as start_bot
 
-class HealthCheckHandler(SimpleHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b"OK")
+async def health_check(request):
+    return web.Response(text="OK")
 
-def run_server():
-    port = int(os.environ.get("PORT", 8080))
-    server = HTTPServer(("0.0.0.0", port), HealthCheckHandler)
-    server.serve_forever()
+def run_bot_in_background():
+    start_bot()
+
+async def main():
+    app = web.Application()
+    app.router.add_get('/', health_check)
+    
+    port = int(os.getenv("PORT", 8080))
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, '0.0.0.0', port)
+    await site.start()
+    print(f"Веб-сервер запущен на порту {port}")
+
+    bot_thread = threading.Thread(target=run_bot_in_background, daemon=True)
+    bot_thread.start()
+    
+    await asyncio.Event().wait()
 
 if __name__ == "__main__":
-    Thread(target=run_server, daemon=True).start()
-    asyncio.run(bot_main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        pass
