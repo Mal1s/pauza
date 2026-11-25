@@ -7,7 +7,9 @@ from pauza_bot.main import router, load_settings
 
 logging.basicConfig(level=logging.INFO)
 
-async def on_startup(bot: Bot):
+async def on_startup(app: web.Application):
+    # Достаем бота из приложения
+    bot: Bot = app['bot']
     base_url = os.getenv("RENDER_EXTERNAL_URL", "https://pauza.onrender.com")
     webhook_url = f"{base_url}/webhook"
     await bot.set_webhook(webhook_url)
@@ -16,15 +18,14 @@ async def on_startup(bot: Bot):
 def main():
     token, admin_chat_id = load_settings()
     
-    # Создаем диспетчер здесь, чтобы он был доступен
     dp = Dispatcher()
     dp.include_router(router)
     
     bot = Bot(token=token)
     
     app = web.Application()
+    app['bot'] = bot # Сохраняем бота в приложении
     
-    # Настраиваем вебхук
     setup_application(app, dp, bot=bot)
     SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path="/webhook")
     
