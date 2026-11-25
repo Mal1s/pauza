@@ -1,33 +1,38 @@
 import os
-import asyncio
+import logging
 from aiohttp import web
-import threading
-from pauza_bot.main import main as start_bot
+from aiogram import Bot, Dispatcher
+from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
+from pauza_bot.main import router, load_settings
 
-async def health_check(request):
-    return web.Response(text="OK")
+logging.basicConfig(level=logging.INFO)
 
-def run_bot_in_background():
-    start_bot()
+async def on_startup(bot: Bot):
+    base_url = os.getenv("RENDER_EXTERNAL_URL", "https://pauza.onrender.com")
+    webhook_url = f"{base_url}/webhook"
+    await bot.set_webhook(webhook_url)
+    logging.info(f"Webhook set to {webhook_url}")
 
-async def main():
+def main():
+    token, admin_chat_id = load_settings()
+    
+    # Создаем диспетчер здесь, чтобы он был доступен
+    dp = Dispatcher()
+    dp.include_router(router)
+    
+    bot = Bot(token=token)
+    
     app = web.Application()
-    app.router.add_get('/', health_check)
+    
+    # Настраиваем вебхук
+    setup_application(app, dp, bot=bot)
+    SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path="/webhook")
+    
+    app.on_startup.append(on_startup)
     
     port = int(os.getenv("PORT", 8080))
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, '0.0.0.0', port)
-    await site.start()
-    print(f"Веб-сервер запущен на порту {port}")
-
-    bot_thread = threading.Thread(target=run_bot_in_background, daemon=True)
-    bot_thread.start()
-    
-    await asyncio.Event().wait()
+    logging.info(f"Starting webhook server on port {port}")
+    web.run_app(app, host="0.0.0.0", port=port)
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        pass
+    main()
