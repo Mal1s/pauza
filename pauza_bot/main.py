@@ -1186,7 +1186,7 @@ def _is_admin_chat(chat_id: int) -> bool:
 @router.callback_query(F.data.startswith("admin:"))
 async def admin_action(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
     message = callback.message
-    if not message or message.chat.id != ADMIN_CHAT_ID:
+    if not isinstance(message, Message) or message.chat.id != ADMIN_CHAT_ID:
         await callback.answer(texts.ADMIN_ONLY_ACTION, show_alert=True)
         return
     parts = (callback.data or "").split(":")
@@ -1214,7 +1214,7 @@ async def admin_action(callback: CallbackQuery, state: FSMContext, bot: Bot) -> 
         await state.clear()
         await callback.answer()
         if menu_action == "new":
-            await admin_new_command(message, bot)
+            await _show_new_applications(message)
         elif menu_action == "stats":
             await admin_stats_command(message)
         elif menu_action == "export":
@@ -1223,6 +1223,32 @@ async def admin_action(callback: CallbackQuery, state: FSMContext, bot: Bot) -> 
             await admin_help_command(message)
         else:
             await message.answer(texts.ADMIN_MENU_UNKNOWN_ACTION)
+        return
+    if action in {"new_page", "open_new"}:
+        if len(parts) != 3 or not parts[2].isascii() or not parts[2].isdecimal():
+            await callback.answer(texts.ADMIN_NOT_FOUND, show_alert=True)
+            return
+        application_id = int(parts[2])
+        if action == "new_page":
+            await callback.answer()
+            await _show_new_applications(message, before_id=application_id or None, edit=True)
+            return
+        application = await db.get_application(application_id)
+        if not application or application["status"] != "new":
+            await callback.answer(texts.ADMIN_ALREADY_PROCESSED, show_alert=True)
+            return
+        await callback.answer()
+        previous_message_id = application.get("admin_message_id")
+        if not await _application_card_to_admin(bot, application_id):
+            await message.answer(texts.ADMIN_NEW_OPEN_FAILED)
+            return
+        if previous_message_id:
+            try:
+                await bot.edit_message_reply_markup(
+                    chat_id=ADMIN_CHAT_ID, message_id=previous_message_id
+                )
+            except TelegramAPIError as exc:
+                logger.debug("Could not clear previous card #%s: %s", application_id, exc)
         return
     if action == "reject" and len(parts) == 3:
         try:
@@ -1577,31 +1603,43 @@ async def admin_stats_command(message: Message) -> None:
     )
 
 
-@router.message(Command("new"))
-async def admin_new_command(message: Message, bot: Bot) -> None:
-    if not _is_admin_chat(message.chat.id):
-        return
-    applications = await db.list_applications(statuses=("new",), limit=30)
-    if not applications:
-        await message.answer(texts.ADMIN_NEW_EMPTY)
-        return
-    existing_cards = []
-    for application in reversed(applications):
-        if not application.get("admin_message_id"):
-            await _application_card_to_admin(bot, application["id"])
-        else:
-            existing_cards.append(
-                f"• #{application['id']} · {_esc(application['full_name'])}"
-            )
-    if existing_cards:
-        await message.answer(
-            texts.ADMIN_NEW_LIST_HEADER.format(
-                title=texts.ADMIN_LIST_TITLE,
-                count=len(applications),
-            )
-            + "\n".join(existing_cards)
-            + f"\n\n{texts.ADMIN_NEW_LIST}"
+NEW_APPLICATIONS_PAGE_SIZE = 10
+
+
+async def _show_new_applications(
+    message: Message, *, before_id: int | None = None, edit: bool = False
+) -> None:
+    try:
+        applications = await db.list_applications(
+            statuses=("new",), limit=NEW_APPLICATIONS_PAGE_SIZE + 1, before_id=before_id
         )
+    except Exception:
+        logger.exception("Could not load new applications")
+        await message.answer(texts.ADMIN_NEW_LOAD_FAILED)
+        return
+
+    page = applications[:NEW_APPLICATIONS_PAGE_SIZE]
+    next_before_id = page[-1]["id"] if len(applications) > len(page) else None
+    markup = keyboards.new_applications_keyboard(page, next_before_id, before_id is not None)
+    body = (
+        texts.ADMIN_NEW_LIST.format(title=texts.ADMIN_LIST_TITLE)
+        if page
+        else texts.ADMIN_NEW_EMPTY
+    )
+    if edit:
+        try:
+            await message.edit_text(body, reply_markup=markup)
+        except TelegramBadRequest as exc:
+            if "message is not modified" not in str(exc).lower():
+                raise
+    else:
+        await message.answer(body, reply_markup=markup)
+
+
+@router.message(Command("new"))
+async def admin_new_command(message: Message) -> None:
+    if _is_admin_chat(message.chat.id):
+        await _show_new_applications(message)
 
 
 async def _send_find_results(bot: Bot, chat_id: int, query: str) -> None:
